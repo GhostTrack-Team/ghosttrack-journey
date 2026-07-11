@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --color-dark-bg: #121315;
+  --color-slate-border: #2e3238;
+  --color-amber-accent: #d97706;
+  --color-amber-light: #f59e0b;
+  --font-sans: "Outfit", "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+/* Hazard Warning Stripe Border */
+.kerb-border {
+  background: repeating-linear-gradient(
+    45deg,
+    #d97706,
+    #d97706 12px,
+    #121315 12px,
+    #121315 24px
+  );
+}
+
+/* Technical grid background pattern */
+.tech-grid {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(46, 50, 56, 0.25) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(46, 50, 56, 0.25) 1px, transparent 1px);
+}
+
+/* DOT grid background pattern */
+.dot-grid {
+  background-size: 20px 20px;
+  background-image: radial-gradient(circle, rgba(46, 50, 56, 0.4) 1px, transparent 1px);
+}
+
+/* Hide scrollbars globally */
+::-webkit-scrollbar {
+  display: none;
+}
+
+body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overflow-x: hidden;
+  background-color: #121315;
+  color: #ffffff;
+}
+
+/* Custom CSS animations */
+@keyframes radar-pulse {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.15);
+    opacity: 0;
+  }
+}
+
+.radar-sweep {
+  position: relative;
+}
+
+.radar-sweep::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 1.5px solid #d97706;
+  border-radius: 50%;
+  animation: radar-pulse 3s infinite linear;
+  pointer-events: none;
+}

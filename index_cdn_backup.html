@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GhostTrack — The Journey</title>
+  
+  <!-- Fonts: Playfair Display (Serif), Space Grotesk (Sans), JetBrains Mono (Mono) -->
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400;1,700&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  
+  <!-- React, ReactDOM, Babel CDNs -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- GSAP & ScrollTrigger -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cream: '#F4F1EA',
+            charcoal: '#111111',
+            crimson: '#E10600',
+          },
+          fontFamily: {
+            serif: ['Playfair Display', 'serif'],
+            sans: ['Space Grotesk', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style type="text/css">
+    /* Kerb border styling */
+    .kerb-border {
+      background: repeating-linear-gradient(45deg, #E10600, #E10600 15px, #ffffff 15px, #ffffff 30px);
+    }
+    
+    /* Carbon texture panel styling */
+    .carbon-texture {
+      background-color: #111111;
+      background-image: linear-gradient(45deg, #181818 25%, transparent 25%),
+                        linear-gradient(-45deg, #181818 25%, transparent 25%),
+                        linear-gradient(45deg, transparent 75%, #181818 75%),
+                        linear-gradient(-45deg, transparent 75%, #181818 75%);
+      background-size: 12px 12px;
+      background-position: 0 0, 0 6px, 6px -6px, -6px 0px;
+    }
+
+    /* Hide scrollbars */
+    ::-webkit-scrollbar {
+      display: none;
+    }
+    body {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      overflow-x: hidden;
+      background-color: #F4F1EA;
+    }
+  </style>
+</head>
+<body class="font-sans antialiased overflow-x-hidden select-none">
+
+  <!-- React root container -->
+  <div id="root"></div>
+
+  <!-- React Script (Babel compiled) -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // 1. F1 Lights Preloader Component
+    function Preloader({ onComplete }) {
+      const [activeLights, setActiveLights] = useState(0);
+
+      useEffect(() => {
+        const interval = setInterval(() => {
+          setActiveLights(prev => {
+            if (prev < 5) {
+              return prev + 1;
+            } else {
+              clearInterval(interval);
+              setTimeout(() => {
+                gsap.to('#preloader', {
+                  duration: 0.8,
+                  clipPath: 'polygon(0 0, 100% 0, 100% 0, 0 0)',
+                  ease: 'power4.inOut',
+                  onComplete: onComplete
+                });
+              }, 400);
+              return prev;
+            }
+          });
+        }, 450);
+        return () => clearInterval(interval);
+      }, [onComplete]);
+
+      return (
+        <div id="preloader" className="fixed inset-0 bg-[#0A0A0A] z-[100] flex flex-col justify-center items-center">
+          <div className="flex flex-col gap-6 items-center p-12 bg-neutral-950 border border-neutral-900 rounded-lg shadow-2xl">
+            <div className="flex flex-col gap-5 bg-neutral-900 p-8 rounded-full border-2 border-neutral-800">
+              {[1, 2, 3, 4, 5].map((light) => (
+                <div 
+                  key={light} 
+                  className={`w-12 h-12 rounded-full border-2 transition-all duration-300 ${
+                    activeLights >= light 
+                      ? 'bg-crimson border-red-500 shadow-[0_0_24px_#E10600]' 
+                      : 'bg-neutral-800 border-neutral-700'
+                  }`}
+                />
+              ))}
+            </div>
+            <div className="font-mono text-xs uppercase tracking-[0.2em] text-neutral-500 mt-4">
+              {activeLights < 5 ? 'GRID IGNITING SYSTEM' : 'SYSTEM DEPLOYED'}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 2. Persistent Truck HUD Vector Component
+    function TruckHUD() {
+      return (
+        <div id="fixed-truck-container" className="fixed left-[4vw] top-1/2 -translate-y-1/2 w-[34vw] h-[48vh] z-30 pointer-events-none flex items-center justify-center text-charcoal transition-colors duration-500">
+          <svg id="truck-svg" className="w-full h-full max-w-lg" viewBox="0 0 420 220" fill="none" stroke="currentColor" strokeWidth="1.8">
+            
+            {/* Haptic Wave Indicators (Steering wheel quadrant highlights) */}
+            <g id="haptic-waves" className="opacity-0">
+              <path d="M 230,103 A 15,15 0 0,0 230,123" stroke="#E10600" strokeWidth="3" strokeLinecap="round" />
+              <path d="M 235,100 A 20,20 0 0,0 235,126" stroke="#E10600" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2,2" />
+              <path d="M 260,103 A 15,15 0 0,1 260,123" stroke="#E10600" stroke-width="3" strokeLinecap="round" />
+              <path d="M 255,100 A 20,20 0 0,1 255,126" stroke="#E10600" stroke-width="1.5" strokeLinecap="round" strokeDasharray="2,2" />
+            </g>
+
+            {/* Radar Arcs */}
+            <g id="radar-arcs" className="opacity-0">
+              <path d="M 140,40 A 50,50 0 0,0 90,110 A 50,50 0 0,0 140,180" stroke="#E10600" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="4,4" />
+              <path d="M 140,40 A 50,50 0 0,1 190,110 A 50,50 0 0,1 140,180" stroke="#E10600" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="4,4" />
+            </g>
+
+            {/* Explodable truck parts */}
+            <g id="truck-assembly">
+              {/* Chassis base structure */}
+              <g id="part-chassis">
+                <rect x="80" y="95" width="260" height="30" rx="3" fill="none" />
+                <line x1="80" y1="110" x2="340" y2="110" strokeDasharray="3,3" />
+              </g>
+              
+              {/* Large Indian Trailer bed */}
+              <g id="part-trailer">
+                <rect x="90" y="68" width="150" height="84" rx="2" fill="none" strokeWidth="2.2" />
+                <line x1="120" y1="68" x2="120" y2="152" />
+                <line x1="150" y1="68" x2="150" y2="152" />
+                <line x1="180" y1="68" x2="180" y2="152" />
+                <line x1="210" y1="68" x2="210" y2="152" />
+                <text x="165" y="115" fontFamily="Space Grotesk" fontSize="8" letterSpacing="1" stroke="none" fill="currentColor" textAnchor="middle" fontWeight="bold">CARGO BED</text>
+              </g>
+
+              {/* Driver Cab */}
+              <g id="part-cab">
+                <rect x="245" y="73" width="70" height="74" rx="6" fill="none" strokeWidth="2.2" />
+                <path d="M 285,78 L 305,88 L 305,132 L 285,142 Z" />
+                <circle id="part-steering" cx="265" cy="110" r="9" strokeWidth="1.8" />
+                <line x1="265" y1="101" x2="265" y2="119" />
+                <line x1="256" y1="110" x2="274" y2="110" />
+              </g>
+
+              {/* Wheels (Left) */}
+              <g id="part-wheels-left">
+                <rect x="110" y="58" width="28" height="10" rx="1" fill="none" />
+                <rect x="150" y="58" width="28" height="10" rx="1" fill="none" />
+                <rect x="270" y="58" width="24" height="10" rx="1" fill="none" />
+              </g>
+              
+              {/* Wheels (Right) */}
+              <g id="part-wheels-right">
+                <rect x="110" y="152" width="28" height="10" rx="1" fill="none" />
+                <rect x="150" y="152" width="28" height="10" rx="1" fill="none" />
+                <rect x="270" y="152" width="24" height="10" rx="1" fill="none" />
+              </g>
+            </g>
+
+            {/* Camera Module Points */}
+            <g id="camera-nodes" className="opacity-0">
+              <circle id="cam-fl" cx="248" cy="70" r="5.5" fill="#E10600" stroke="none" />
+              <line x1="248" y1="70" x2="228" y2="55" stroke="#E10600" strokeWidth="1.5" />
+              <circle id="cam-fr" cx="248" cy="150" r="5.5" fill="#E10600" stroke="none" />
+              <line x1="248" y1="150" x2="228" y2="165" stroke="#E10600" strokeWidth="1.5" />
+            </g>
+          </svg>
+        </div>
+      );
+    }
+
+    // 3. Main Application Component
+    function App() {
+      const [showPreloader, setShowPreloader] = useState(true);
+
+      useEffect(() => {
+        if (showPreloader) return;
+
+        // Register GSAP ScrollTrigger
+        gsap.registerPlugin(ScrollTrigger);
+
+        const panels = gsap.utils.toArray('.panel');
+        const container = document.querySelector('.scroll-container');
+
+        // Main Horizontal translation
+        const scrollTween = gsap.to(panels, {
+          xPercent: -100 * (panels.length - 1),
+          ease: 'none',
+          scrollTrigger: {
+            trigger: '.scroll-container',
+            pin: true,
+            scrub: 0.4,
+            start: 'top top',
+            end: () => '+=' + (container.scrollWidth - window.innerWidth),
+            invalidateOnRefresh: true,
+            onUpdate: (self) => {
+              orchestrateTruckHUD(self.progress);
+            }
+          }
+        });
+
+        // Parallax background grid lines
+        gsap.to('.bg-grid-parallax', {
+          x: '-12vw',
+          ease: 'none',
+          scrollTrigger: {
+            trigger: '.scroll-container',
+            scrub: true,
+            start: 'top top',
+            end: () => '+=' + (container.scrollWidth - window.innerWidth)
+          }
+        });
+
+        // Text reveal effects
+        gsap.utils.toArray('.card-reveal').forEach((card) => {
+          gsap.from(card.querySelectorAll('.text-reveal'), {
+            y: 35,
+            opacity: 0,
+            duration: 0.6,
+            stagger: 0.08,
+            ease: 'power2.out',
+            scrollTrigger: {
+              trigger: card,
+              containerAnimation: scrollTween,
+              start: 'left 88%',
+              toggleActions: 'play none none none'
+            }
+          });
+        });
+
+        // Stage 1: Timeline axis crimson progress line
+        gsap.to('#timeline-crimson-progress', {
+          width: '100%',
+          ease: 'none',
+          scrollTrigger: {
+            trigger: '#timeline-axis-container',
+            containerAnimation: scrollTween,
+            start: 'left center',
+            end: 'right center',
+            scrub: true
+          }
+        });
+
+        // Stage 2: Callout box triggers
+        gsap.timeline({
+          scrollTrigger: {
+            trigger: '#callout-v1',
+            containerAnimation: scrollTween,
+            start: 'left center',
+            end: 'right center',
+            scrub: true
+          }
+        })
+        .to('#callout-v1', { opacity: 0.25 })
+        .to('#callout-v2', { opacity: 1, borderColor: '#E10600' }, 0);
+
+        // Stage 4: Rolling number dataset image counter
+        const counterObj = { val: 46 };
+        gsap.to(counterObj, {
+          val: 8570,
+          roundProps: 'val',
+          duration: 2.2,
+          ease: 'power3.out',
+          scrollTrigger: {
+            trigger: '#dataset-image-counter',
+            containerAnimation: scrollTween,
+            start: 'left center',
+            toggleActions: 'play none none none'
+          },
+          onUpdate: () => {
+            const countEl = document.getElementById('dataset-image-counter');
+            if (countEl) countEl.textContent = counterObj.val.toLocaleString() + " Images";
+          }
+        });
+
+        // Stage 9 table animations
+        gsap.to('.table-col-anim', {
+          opacity: 1,
+          y: 0,
+          stagger: 0.12,
+          duration: 0.7,
+          ease: 'power3.out',
+          scrollTrigger: {
+            trigger: '.table-col-anim',
+            containerAnimation: scrollTween,
+            start: 'left 82%',
+            toggleActions: 'play none none none'
+          }
+        });
+
+        // Stage 10: Outro quote focus - drop truck opacity
+        gsap.to('#fixed-truck-container', {
+          scrollTrigger: {
+            trigger: '#outro-quote-container',
+            containerAnimation: scrollTween,
+            start: 'left 45%',
+            end: 'left 15%',
+            scrub: true
+          },
+          opacity: 0,
+          scale: 0.5
+        });
+
+        // Background transitions
+        // Setup class hooks on panels for truck stroke colors
+        // Clean up on component unmount
+        return () => {
+          ScrollTrigger.getAll().forEach(t => t.kill());
+        };
+      }, [showPreloader]);
+
+      // Truck SVG transitions matching the 8 visual segments
+      function orchestrateTruckHUD(progress) {
+        const truck = document.getElementById('fixed-truck-container');
+        const radarArcs = document.getElementById('radar-arcs');
+        const cameraNodes = document.getElementById('camera-nodes');
+        const hapticWaves = document.getElementById('haptic-waves');
+        
+        const partCab = document.getElementById('part-cab');
+        const partTrailer = document.getElementById('part-trailer');
+        const partWheelsL = document.getElementById('part-wheels-left');
+        const partWheelsR = document.getElementById('part-wheels-right');
+
+        if (!truck || !radarArcs || !cameraNodes || !hapticWaves) return;
+
+        // Reset pieces
+        gsap.set([partCab, partTrailer, partWheelsL, partWheelsR], { x: 0, y: 0 });
+        radarArcs.style.opacity = '0';
+        cameraNodes.style.opacity = '0';
+        hapticWaves.style.opacity = '0';
+
+        // Segment 0: Hero & Context (progress < 0.12)
+        if (progress < 0.12) {
+          truck.className = "fixed left-[4vw] top-1/2 -translate-y-1/2 w-[34vw] h-[48vh] z-30 pointer-events-none flex items-center justify-center text-charcoal";
+          gsap.to(truck, { scale: 1.0, x: 0, y: 0, rotation: 0, duration: 0.2 });
+        }
+        // Segment 1: Phase 1 & 2 Interlock (0.12 - 0.25)
+        else if (progress >= 0.12 && progress < 0.25) {
+          truck.className = "fixed left-[4vw] top-1/2 -translate-y-1/2 w-[34vw] h-[48vh] z-30 pointer-events-none flex items-center justify-center text-charcoal";
+          gsap.to(truck, { scale: 1.25, x: 60, y: -20, rotation: 12, duration: 0.2 });
+          radarArcs.style.opacity = '1';
+        }
+        // Segment 2: Phase 3 & 4 Dataset (0.25 - 0.39) - Charcoal
+        else if (progress >= 0.25 && progress < 0.39) {
+          truck.className = "fixed left-[4vw] top-1/2 -translate-y-1/2 w-[34vw] h-[48vh] z-30 pointer-events-none flex items-center justify-center text-cream";
+          gsap.to(truck, { scale: 1.1, x: 30, y: 15, rotation: -10, duration: 0.2 });
+        }
+        // Segment 3: Phase 5 & 6 Cameras & Vibration (0.39 - 0.52)
+        else if (progress >= 0.39 && progress < 0.52) {
+          truck.className = "fixed left-[4vw] top-1/2 -translate-y-1/2 w-[34vw] h-[48vh] z-30 pointer-events-none flex items-center justify-center text-charcoal";
+          gsap.to(truck, { scale: 1.45, x: -50, y: -10, rotation: 6, duration: 0.2 });
+          cameraNodes.style.opacity = '1';
+          hapticWaves.style.opacity = '1';
+        }
+        // Segment 4: Phase 7 & 8 Logic & Communications (0.52 - 0.65)
+        else if (progress >= 0.52 && progress < 0.65) {
+          truck.className = "fixed left-[4vw] top-1/2 -translate-y-1/2 w-[34vw] h-[48vh] z-30 pointer-events-none flex items-center justify-center text-charcoal";
+          gsap.to(truck, { scale: 1.1, x: -20, y: 15, rotation: -4, duration: 0.2 });
+        }
+        // Segment 5: Phase 9 scale model exploded view (0.65 - 0.73)
+        else if (progress >= 0.65 && progress < 0.73) {
+          truck.className = "fixed left-[4vw] top-1/2 -translate-y-1/2 w-[34vw] h-[48vh] z-30 pointer-events-none flex items-center justify-center text-charcoal";
+          gsap.to(truck, { scale: 1.1, x: 0, y: 0, rotation: 0, duration: 0.2 });
+          
+          gsap.set(partCab, { x: 30, y: -18 });
+          gsap.set(partTrailer, { x: -35, y: 15 });
+          gsap.set(partWheelsL, { y: -22 });
+          gsap.set(partWheelsR, { y: 22 });
+        }
+        // Segment 6: Matrix & Comparison tables (0.73 - 0.94) - Charcoal
+        else if (progress >= 0.73 && progress < 0.94) {
+          truck.className = "fixed left-[4vw] top-1/2 -translate-y-1/2 w-[34vw] h-[48vh] z-30 pointer-events-none flex items-center justify-center text-cream";
+          gsap.to(truck, { scale: 0.9, x: -20, y: 25, rotation: -6, duration: 0.2 });
+        }
+        // Segment 7: Quote (progress >= 0.94)
+        else if (progress >= 0.94) {
+          // Handled by ScrollTrigger timeline opacity hook
+        }
+      }
+
+      return (
+        <div className="font-sans antialiased select-none bg-cream min-h-screen text-charcoal relative">
+          
+          {showPreloader && <Preloader onComplete={() => setShowPreloader(false)} />}
+          
+          {/* Borders */}
+          <div className="kerb-border h-[8px] w-full fixed top-0 left-0 z-50"></div>
+          <div className="kerb-border h-[8px] w-full fixed bottom-0 left-0 z-50"></div>
+
+          {/* Persistent Truck HUD */}
+          <TruckHUD />
+
+          {/* Parallax background lines overlay */}
+          <div className="bg-grid-parallax fixed inset-0 pointer-events-none flex justify-between px-16 opacity-[0.03] z-10 w-[150vw]">
+            {[...Array(12)].map((_, i) => (
+              <div key={i} className="w-[1px] h-full border-r border-dashed border-charcoal"></div>
+            ))}
+          </div>
+
+          {/* Main Horizontal Scroll container */}
+          <div className="scroll-container flex h-screen flex-row overflow-hidden relative">
+
+            {/* SECTION 0: HERO & CONTEXT (Staggered Overlap) */}
+            <div className="w-[135vw] h-full flex-shrink-0 flex items-center relative pl-[42vw] pr-[5vw] border-r border-neutral-300">
+              
+              {/* Stage 0: Hero Card */}
+              <div className="card-reveal top-[15vh] w-[42vw] absolute bg-cream/90 backdrop-blur-sm p-8 border border-neutral-300 shadow-sm z-20">
+                <span className="text-reveal font-mono text-xs uppercase tracking-[0.3em] text-crimson font-bold block mb-3">AIS-186 SYSTEM REPORT</span>
+                <h1 className="text-reveal font-serif text-5xl md:text-6xl font-bold tracking-tighter text-charcoal leading-none mb-4">
+                  GhostTrack:<br><span className="text-crimson">The Journey</span>
+                </h1>
+                <p className="text-reveal font-mono text-xs uppercase tracking-wider text-neutral-500 mb-6">
+                  From a Problem Statement to a Working Blind-Spot Safety System
+                </p>
+                <div className="text-reveal border-t border-neutral-300 pt-5">
+                  <p className="font-mono text-[10px] text-neutral-600">
+                    TEAM GHOSTTRACK — Sumith, Rajamaran, Leharin
+                  </p>
+                  <p className="font-mono text-[10px] text-crimson font-bold mt-1">
+                    AMET UNIVERSITY, CHENNAI
+                  </p>
+                </div>
+              </div>
+
+              {/* Stage 1: Context Card */}
+              <div className="card-reveal top-[46vh] left-[85vw] w-[45vw] absolute bg-cream/90 backdrop-blur-sm p-8 border border-neutral-300 shadow-sm z-20">
+                <span className="text-reveal font-mono text-xs text-crimson font-bold mb-2 tracking-widest">// INITIAL CONTEXT</span>
+                <h2 className="text-reveal font-serif text-2xl md:text-3xl font-bold text-charcoal mb-4">The Problem We Started With</h2>
+                <div className="text-reveal font-mono text-xs text-neutral-700 space-y-3 leading-relaxed">
+                  <p>Over 10 million heavy commercial vehicles operate on Indian roads with almost no blind-spot protection. Existing systems — proximity sensors, basic cameras — either lack intelligence or are too expensive for Indian fleet operators to adopt. With India's AIS-186 BSIS mandate approaching in April 2026, the timing created a real window to build something that could genuinely help.</p>
+                  <p>We didn't start with a solution. We started with a technical concept document, three team members with basic Python knowledge, and no trained model, no dataset, no working hardware, and no certainty about which components we'd even be given. Everything else in this document is what happened between that starting point and a working system.</p>
+                </div>
+                <div className="text-reveal w-full h-[2px] bg-neutral-350 mt-6 relative flex items-center" id="timeline-axis-container">
+                  <div className="h-[8px] w-[8px] rounded-full bg-crimson absolute left-1/4">
+                    <span class="absolute top-3 font-mono text-[8px] font-bold text-crimson whitespace-nowrap">START: CONCEPT</span>
+                  </div>
+                  <div className="h-[8px] w-[8px] rounded-full bg-crimson absolute left-3/4">
+                    <span class="absolute bottom-3 font-mono text-[8px] font-bold text-crimson whitespace-nowrap">MANDATE: APRIL 2026</span>
+                  </div>
+                  <div className="h-[2px] bg-crimson w-0" id="timeline-crimson-progress"></div>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 1: INTERLOCKING PHASE 1 & 2 (High/Low Tiers) */}
+            <div className="w-[85vw] h-full flex-shrink-0 flex flex-col justify-between py-[12vh] pl-[42vw] pr-[5vw] relative border-r border-neutral-300">
+              
+              {/* Stage 3: Phase 2 (High-Tier, Top) */}
+              <div className="card-reveal w-[38vw] bg-cream/90 backdrop-blur-sm p-6 border border-neutral-300 shadow-sm self-start">
+                <span className="text-reveal font-mono text-xs text-crimson font-bold mb-2 tracking-widest">// PHASE 02</span>
+                <h2 className="text-reveal font-serif text-xl md:text-2xl font-bold text-charcoal mb-3">Phase 2 — The ESP32 Board Wasn't What the Datasheet Promised</h2>
+                <div className="text-reveal font-mono text-[11px] text-neutral-700 space-y-2 leading-relaxed mb-4">
+                  <p>Firmware v2 was written assuming ESP32-S3 GPIO mapping. When we actually got hands-on with the board and started wiring the radar, the radar stayed silent. After checking code, baud rates, and swapping wires, we traced the real fault to a split breadboard power rail — the two halves weren't electrically connected, so half the circuit had no power at all. Confirmed with a multimeter, rail by rail.</p>
+                  <p>Fixing the power issue exposed a second problem: GPIO 16 and 17 didn't physically exist on the header we were using — present on the datasheet, absent on the board. We remapped the radar's serial connection to GPIO 21/22 to keep moving. Once we sourced the correct ESP32-S3 hardware through the grant, we retargeted the firmware properly: the Pi-facing UART link uses GPIO 26/27, while the radar keeps its own independent channel on GPIO 21/22 — two separate serial streams feeding into one fusion layer in software.</p>
+                </div>
+                <div className="text-reveal border border-neutral-300 p-2.5 bg-white rounded flex items-center justify-between font-mono text-[9px] text-neutral-500">
+                  <span>UART: GPIO 26/27</span>
+                  <span class="text-crimson font-bold">➔</span>
+                  <span class="text-crimson font-bold">Radar: GPIO 21/22</span>
+                </div>
+              </div>
+
+              {/* Stage 2: Phase 1 (Low-Tier, Bottom) */}
+              <div className="card-reveal w-[38vw] bg-cream/90 backdrop-blur-sm p-6 border border-neutral-300 shadow-sm self-end ml-12">
+                <span className="text-reveal font-mono text-xs text-crimson font-bold mb-2 tracking-widest">// PHASE 01</span>
+                <h2 className="text-reveal font-serif text-xl md:text-2xl font-bold text-charcoal mb-3">Phase 1 — Plan vs. Reality: The Component Mismatch</h2>
+                <div className="text-reveal font-mono text-[11px] text-neutral-700 space-y-2 leading-relaxed mb-4">
+                  <p>The original concept specified a 24GHz mmWave radar and LRA haptic motors, running on an ESP32-S3. What the organisation actually issued us at the start was an ultrasonic distance sensor and standard servo motors — components that are cheaper, easier to source, but fundamentally limited: ultrasonic sensors lose reliability above 30km/h and in rain, and servo motors are too bulky to embed in a steering wheel.</p>
+                  <p>Rather than wait, we wrote two versions of the firmware in parallel: v1 targeted the components we actually had, so development could continue immediately; v2 was written against the specification we wanted to reach once better components arrived. We also submitted a request with a technical justification. A ₹2,000 grant was approved, and we sourced two Waveshare S3KM1110 24GHz mmWave radar modules and a MicroSD module.</p>
+                </div>
+                <div className="text-reveal grid grid-cols-2 gap-2">
+                  <div id="callout-v1" className="border border-neutral-300 p-2 rounded bg-[#EBE8E0] font-mono text-[9px] opacity-60">
+                    <span class="text-neutral-500 block">v1 Ultrasonic Prototype</span>
+                  </div>
+                  <div id="callout-v2" className="border border-crimson p-2 rounded bg-white font-mono text-[9px] opacity-40">
+                    <span class="text-crimson font-bold block">v2 24GHz mmWave Production</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 2: PHASE 3 & 4 DATASET & PIPELINE (Full height charcoal, staggered X-axis) */}
+            <div className="w-[145vw] h-full flex-shrink-0 carbon-texture text-cream flex items-center relative pl-[42vw] pr-[5vw] border-r border-neutral-800">
+              
+              {/* Stage 4: Phase 3 Card (High-Tier) */}
+              <div className="card-reveal top-[12vh] w-[44vw] absolute bg-neutral-900/90 border border-neutral-800 p-6 shadow-2xl">
+                <span className="text-reveal font-mono text-xs text-crimson font-bold mb-2 tracking-widest">// PHASE 03</span>
+                <h2 className="text-reveal font-serif text-xl md:text-2xl font-bold text-white mb-3">Phase 3 — Dataset: From 46 Images to 8,570</h2>
+                <div className="text-reveal font-mono text-[11px] text-neutral-300 space-y-2 leading-relaxed mb-4">
+                  <p>Early modelling work was split across three separate, disconnected Colab notebooks — one team member each on different vehicle classes, with mismatched class names and no shared structure. Reviewing them together made the problem obvious: three separate models can't power one coherent system. We scrapped all three and rebuilt into a single unified 14-cell notebook covering the full pipeline, from dataset to a live Gradio demo.</p>
+                  <p>The first real training run used a Kaggle "Indian Vehicle" dataset that turned out to contain only 46 usable images for our target classes — nowhere near enough to learn anything. Instead of retraining on the same weak data, we rebuilt the dataset pipeline entirely: COCO 2017 (2,910 images) + Roboflow Indian-road datasets (1,829 images) + the original Kaggle images, totalling 8,570 images across 10 classes. Getting there took multiple days, several expired Roboflow API keys, repeated Colab GPU quota resets, and one particularly frustrating session disconnect that cost a 3–5 hour training run outright.</p>
+                  <p>Switching to Kaggle's GPU introduced a new failure mode: data.yaml pointed to /content/... instead of /kaggle/working/..., so a model that trained to completion still failed to save. We fixed this permanently by adding an auto-save block directly inside the training cell, so weights are copied out the moment training finishes — no manual step to forget.</p>
+                </div>
+                <div className="text-reveal border border-neutral-800 bg-neutral-950 p-3 rounded flex items-center justify-between shadow-inner">
+                  <span class="font-mono text-[9px] text-neutral-500 uppercase tracking-widest">Dataset Payload Status</span>
+                  <div class="font-serif text-3xl font-bold text-crimson tracking-tight" id="dataset-image-counter">46</div>
+                </div>
+              </div>
+
+              {/* Stage 5: Phase 4 Card (Low-Tier, shifted right) */}
+              <div className="card-reveal top-[46vh] left-[92vw] w-[44vw] absolute bg-neutral-900/90 border border-neutral-800 p-6 shadow-2xl">
+                <span className="text-reveal font-mono text-xs text-crimson font-bold mb-2 tracking-widest">// PHASE 04</span>
+                <h2 className="text-reveal font-serif text-xl md:text-2xl font-bold text-white mb-3">Phase 4 — Detection Quality: Why One Model Wasn't Enough</h2>
+                <div className="text-reveal font-mono text-[11px] text-neutral-300 space-y-2 leading-relaxed mb-4">
+                  <p>With a real dataset trained (YOLOv8n, 100 epochs, Kaggle T4 GPU, mAP@0.5 = 0.689), testing on actual Indian road images revealed the gap that mattered most: the model was missing persons, motorcycles, and bicycles — the exact vulnerable road users GhostTrack exists to protect. Cars and auto-rickshaws detected fine.</p>
+                  <p>The cause was the data itself: COCO's person/cyclist images are front-facing, Western-context photos. A truck-mounted side camera sees people from a completely different angle. Rather than spend more training cycles chasing this, we adopted a dual-model architecture: the pretrained COCO YOLOv8n handles person/bicycle/motorcycle at 83–87% confidence using its existing training strength, while our custom GhostTrack model handles India-specific classes — auto-rickshaw (91.6%), tractor (90.6%), e-rickshaw, and LCVs. This delivered better results in about ten minutes of integration work than another full training cycle would have.</p>
+                </div>
+                <div className="text-reveal flex flex-col gap-2 font-mono text-[9px]">
+                  <div class="border border-neutral-700 bg-neutral-950 p-2 flex justify-between relative">
+                    <div class="absolute left-0 top-0 bottom-0 w-1 bg-[#00ff66]"></div>
+                    <span>Bounding Box A (COCO)</span>
+                    <span class="text-[#00ff66] font-bold">Person: 87%</span>
+                  </div>
+                  <div class="border border-crimson bg-neutral-950 p-2 flex justify-between relative">
+                    <div class="absolute left-0 top-0 bottom-0 w-1 bg-crimson"></div>
+                    <span>Bounding Box B (GhostTrack)</span>
+                    <span class="text-crimson font-bold">Auto-Rickshaw: 91.6%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 3: INTERLOCKING PHASE 5 & 6 (Off-white, High/Low) */}
+            <div className="w-[85vw] h-full flex-shrink-0 flex flex-col justify-between py-[12vh] pl-[42vw] pr-[5vw] relative border-r border-neutral-300">
+              
+              {/* Stage 6: Phase 5 Card (High-Tier, Top) */}
+              <div className="card-reveal w-[38vw] bg-cream/90 backdrop-blur-sm p-6 border border-neutral-300 shadow-sm self-start">
+                <span className="text-reveal font-mono text-xs text-crimson font-bold mb-2 tracking-widest">// PHASE 05</span>
+                <h2 className="text-reveal font-serif text-xl md:text-2xl font-bold text-charcoal mb-3">Phase 5 — Three Camera Generations</h2>
+                <div className="text-reveal font-mono text-[11px] text-neutral-700 space-y-2 leading-relaxed">
+                  <p><strong>Gen 1 — USB webcam:</strong> Worked in Colab, but poor low-light performance and no wide-angle coverage.</p>
+                  <p><strong>Gen 2 — 160° fisheye USB camera:</strong> Better field of view, but USB bandwidth bottlenecked frame rate once real-time inference was running on the Pi.</p>
+                  <p><strong>Gen 3 — Raspberry Pi Camera Module (OV5647, CSI):</strong> Required a full rewrite from cv2.VideoCapture() to the Picamera2 API — different capture loop, different frame format, different everything downstream. Direct CSI bypassed the USB bottleneck entirely.</p>
+                  <p>The hardware kept evolving after that: we moved from Raspberry Pi 4 to Raspberry Pi 5 with dual CSI cameras, which needed explicit dtoverlay entries in /boot/firmware/config.txt before both cameras would reliably enumerate. Rendering detection output over VNC was unreliable with cv2.imshow(), so we switched to a Flask MJPEG stream instead — solved it outright. Sustained inference also pushed the Pi 5 past 85°C and into thermal throttling, which we resolved with physical cooling.</p>
+                </div>
+              </div>
+
+              {/* Stage 7: Phase 6 Card (Low-Tier, Bottom) */}
+              <div className="card-reveal w-[38vw] bg-cream/90 backdrop-blur-sm p-6 border border-neutral-300 shadow-sm self-end ml-10">
+                <span className="text-reveal font-mono text-xs text-crimson font-bold mb-2 tracking-widest">// PHASE 06</span>
+                <h2 className="text-reveal font-serif text-xl md:text-2xl font-bold text-charcoal mb-3">Phase 6 — From Pointing Servos to Felt Vibration</h2>
+                <div className="text-reveal font-mono text-[11px] text-neutral-700 space-y-2 leading-relaxed mb-4">
+                  <p>The original haptic concept used two servo motors (via a PCA9685 driver) that would physically point toward the danger side. It worked, in a basic sense — but servos are large, current-hungry, and mechanically impractical to embed inside a steering wheel rim.</p>
+                  <p>We pivoted to 10mm ERM coin vibration motors (under 2g each), driven through BC547 transistors and controlled via the ESP32's LEDC PWM peripheral, embedded in a custom 3D-printed 35cm three-spoke steering wheel at the 9 o'clock and 3 o'clock positions. Two alert intensities were defined in firmware: CRITICAL as continuous full-power PWM, AWARENESS as a pulsed partial-power pattern. The result is smaller, quieter, and maps directly to how a driver actually experiences danger — felt in the specific hand closest to the threat, not seen or heard.</p>
+                </div>
+                <div className="text-reveal border border-neutral-300 p-3 bg-[#EBE8E0] rounded flex items-center justify-center gap-6 font-mono text-[10px]">
+                  <div class="flex items-center gap-2">
+                    <div class="w-2.5 h-2.5 rounded-full bg-crimson animate-pulse"></div>
+                    <span>L: Haptic Alert</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <div class="w-2.5 h-2.5 rounded-full bg-crimson animate-pulse"></div>
+                    <span>R: Haptic Alert</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 4: INTERLOCKING PHASE 7 & 8 (Off-white, High/Low) */}
+            <div className="w-[85vw] h-full flex-shrink-0 flex flex-col justify-between py-[12vh] pl-[42vw] pr-[5vw] relative border-r border-neutral-300">
+              
+              {/* Stage 8: Phase 7 Card (High-Tier, Top) */}
+              <div className="card-reveal w-[38vw] bg-cream/90 backdrop-blur-sm p-6 border border-neutral-300 shadow-sm self-start">
+                <span className="text-reveal font-mono text-xs text-crimson font-bold mb-2 tracking-widest">// PHASE 07</span>
+                <h2 className="text-reveal font-serif text-xl md:text-2xl font-bold text-charcoal mb-3">Phase 7 — Getting the Fusion Logic Right</h2>
+                <div className="text-reveal font-mono text-[11px] text-neutral-700 space-y-2 leading-relaxed mb-4">
+                  <p>The first version of the alert logic was radar-only: anything closer than a fixed threshold triggered a warning. In practice, this meant walls, parked vehicles, and speed bumps all set off false alarms — a system that cries wolf isn't trustworthy in a cab.</p>
+                  <p>We redesigned this in stages:</p>
+                  <p>1. <strong>Two-input AND logic</strong>: an alert only escalates to CRITICAL if radar detects proximity and vision confirms a person, cyclist, or other vulnerable road user. A wall can be close; a wall doesn't classify as a person.</p>
+                  <p>2. <strong>Three-state machine</strong>: SAFE / AWARENESS / CRITICAL, each with distinct LED and haptic behaviour, so the system communicates urgency, not just presence.</p>
+                  <p>3. <strong>Speed-adaptive thresholds</strong>: roughly 1.5m in city conditions vs. 5.0m at highway speed, since a fixed distance threshold doesn't make sense across that range.</p>
+                </div>
+                <div className="text-reveal border border-neutral-300 p-2 bg-white rounded flex items-center justify-around font-mono text-[10px] text-center">
+                  <div class="border border-neutral-200 p-1 bg-neutral-100 rounded w-[28%] text-neutral-450 font-bold">SAFE</div>
+                  <div class="text-neutral-400">➔</div>
+                  <div class="border border-crimson p-1 bg-neutral-50 rounded w-[28%] text-crimson font-bold">AWARE</div>
+                  <div class="text-neutral-400">➔</div>
+                  <div class="border-2 border-crimson p-1 bg-red-100 rounded w-[28%] text-crimson font-bold animate-pulse">CRITICAL</div>
+                </div>
+              </div>
+
+              {/* Stage 9: Phase 8 Card (Low-Tier, Bottom) */}
+              <div className="card-reveal w-[38vw] bg-cream/90 backdrop-blur-sm p-6 border border-neutral-300 shadow-sm self-end ml-12">
+                <span className="text-reveal font-mono text-xs text-crimson font-bold mb-2 tracking-widest">// PHASE 08</span>
+                <h2 className="text-reveal font-serif text-xl md:text-2xl font-bold text-charcoal mb-3">Phase 8 — Making Two Different Computers Talk to Each Other</h2>
+                <div className="text-reveal font-mono text-[11px] text-neutral-700 space-y-2 leading-relaxed">
+                  <p>The Raspberry Pi 5 runs Linux and Python; the ESP32-S3 runs bare-metal C++. Bridging them meant defining a UART protocol from scratch: the Pi sends plain-text strings like LEFT:person, RIGHT:bicycle, or CLEAR, and the ESP32 parses these as one input into its fusion decision.</p>
+                  <p>Getting the link working required mapping Pi 5 UART GPIOs correctly, enabling hardware UART through raspi-config, confirming /dev/ttyAMA0 existed after reboot, and matching that against the ESP32-S3's exposed UART pins (GPIO 26/27), kept deliberately separate from the radar's own UART channel (GPIO 21/22) to avoid conflicts.</p>
+                  <p>On the radar side, the initial ASCII parser didn't work at all with the Waveshare S3KM1110, which transmits structured binary frames (header, data, footer) rather than plain text. We researched the protocol in advance and built a proper state-machine binary parser to extract moving- and stationary-target distance fields correctly.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 5: PHASE 9 SCALE MODEL (Off-white, Mid-Tier) */}
+            <div className="w-[85vw] h-full flex-shrink-0 flex items-center pl-[42vw] pr-[5vw] relative border-r border-neutral-300">
+              
+              {/* Stage 10: Phase 9 Card */}
+              <div className="card-reveal top-[22vh] w-[42vw] absolute bg-cream/90 backdrop-blur-sm p-8 border border-neutral-300 shadow-sm">
+                <span className="text-reveal font-mono text-xs text-crimson font-bold mb-2 tracking-widest">// PHASE 09</span>
+                <h2 className="text-reveal font-serif text-2xl md:text-3xl font-bold text-charcoal mb-4">Phase 9 — Building Something You Can Actually Show Someone</h2>
+                <div className="text-reveal font-mono text-xs text-neutral-700 space-y-3 leading-relaxed mb-6">
+                  <p>Rather than demo the system on a bare breadboard, we designed and 3D-printed a 33×10×12cm scale model of an Indian HCV (Ashok Leyland/Tata style) — seven printed pieces, dovetail joints, internal chassis wire channels, and camera mounting points at front-left and front-right. Every wire is routed internally except the four coin-motor leads, which exit through the chassis floor by design.</p>
+                  <p>That single decision changed what the project communicated. A working circuit on a table is a prototype; a scaled truck with cameras mounted where they'd actually sit is a use case anyone can understand at a glance.</p>
+                </div>
+                <div className="text-reveal border border-neutral-300 bg-[#EBE8E0] p-4 rounded flex items-center justify-between font-mono text-xs shadow-inner">
+                  <span class="text-neutral-500 uppercase text-[9px] tracking-wider">CAD Blueprint State</span>
+                  <span class="text-crimson font-bold">7 Part Interlocking Assembly (Dovetail)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 6: STANDINGS, COMPARISONS, LINKS (Full height charcoal tracking matrix) */}
+            
+            {/* Stage 11: Where Things Stand Table */}
+            <div className="w-[85vw] h-full flex-shrink-0 carbon-texture text-cream flex items-center pl-[42vw] pr-[5vw] border-r border-neutral-800">
+              <div className="w-full py-12 max-w-2xl">
+                <div className="table-col-anim opacity-0 flex flex-col gap-4">
+                  <h3 className="font-serif text-xl md:text-2xl font-bold border-b border-neutral-850 pb-2 text-white">Where Things Stand Now</h3>
+                  <div className="font-mono text-[10px] overflow-x-auto">
+                    <table className="w-full text-left border-collapse border border-neutral-800 bg-neutral-950/80 text-neutral-350">
+                      <thead>
+                        <tr className="border-b border-neutral-800 bg-neutral-900/60">
+                          <th className="p-2.5 font-bold text-crimson text-[9px] uppercase tracking-wider w-3/5">Component</th>
+                          <th className="p-2.5 font-bold text-crimson text-[9px] uppercase tracking-wider w-2/5">Engineering Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-900">
+                        <tr class="hover:bg-neutral-900/40 transition-colors">
+                          <td class="p-2.5 font-semibold text-white leading-relaxed">Pi 5 dual-camera detection pipeline (Picamera2 + YOLOv8n COCO + custom ONNX + Flask MJPEG stream)</td>
+                          <td class="p-2.5 text-[#00ff66] font-semibold flex items-center gap-1.5 whitespace-nowrap">
+                            <svg class="w-3.5 h-3.5 text-[#00ff66] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            <span>Functional End-to-End</span>
+                          </td>
+                        </tr>
+                        <tr class="hover:bg-neutral-900/40 transition-colors">
+                          <td class="p-2.5 font-semibold text-white">ESP32-S3 Firmware</td>
+                          <td class="p-2.5 text-[#00ff66] font-semibold flex items-center gap-1.5 whitespace-nowrap">
+                            <svg class="w-3.5 h-3.5 text-[#00ff66] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            <span>Live Radar & Haptics Operational</span>
+                          </td>
+                        </tr>
+                        <tr class="hover:bg-neutral-900/40 transition-colors">
+                          <td class="p-2.5 font-semibold text-white">Pi ↔ ESP32 Physical UART</td>
+                          <td class="p-2.5 text-[#00ff66] font-semibold flex items-center gap-1.5 whitespace-nowrap">
+                            <svg class="w-3.5 h-3.5 text-[#00ff66] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            <span>Connected & Functional</span>
+                          </td>
+                        </tr>
+                        <tr class="hover:bg-neutral-900/40 transition-colors">
+                          <td class="p-2.5 font-semibold text-white">Live Radar testing</td>
+                          <td class="p-2.5 text-[#00ff66] font-semibold flex items-center gap-1.5 whitespace-nowrap">
+                            <svg class="w-3.5 h-3.5 text-[#00ff66] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            <span>Verified Live in Combined System</span>
+                          </td>
+                        </tr>
+                        <tr class="hover:bg-neutral-900/40 transition-colors">
+                          <td class="p-2.5 font-semibold text-white">Thermal Management</td>
+                          <td class="p-2.5 text-[#00ff66] font-semibold flex items-center gap-1.5 whitespace-nowrap">
+                            <svg class="w-3.5 h-3.5 text-[#00ff66] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            <span>Resolved with active physical cooling</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Stage 12: What Meaningfully Improved Table */}
+            <div className="w-[90vw] h-full flex-shrink-0 carbon-texture text-cream flex items-center pl-[42vw] pr-[5vw] border-r border-neutral-800">
+              <div class="w-full py-12 max-w-3xl">
+                <div class="table-col-anim opacity-0 flex flex-col gap-4">
+                  <h3 class="font-serif text-xl md:text-2xl font-bold border-b border-neutral-850 pb-2 text-white">What Meaningfully Improved</h3>
+                  <div class="font-mono text-[9px] overflow-x-auto">
+                    <table class="w-full text-left border-collapse border border-neutral-800 bg-neutral-950/80 text-neutral-350">
+                      <thead>
+                        <tr class="border-b border-neutral-800 bg-neutral-900/60">
+                          <th class="p-2 font-bold text-crimson text-[9px] uppercase tracking-wider w-1/5">Area</th>
+                          <th class="p-2 font-bold text-crimson text-[9px] uppercase tracking-wider w-2/5">Where We Started</th>
+                          <th class="p-2 font-bold text-crimson text-[9px] uppercase tracking-wider w-2/5">Where We Are Now</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-neutral-900">
+                        <tr class="hover:bg-neutral-900/40 transition-colors">
+                          <td class="p-2 font-semibold text-white">Dataset</td>
+                          <td class="p-2 text-neutral-450">46 images, 3 disconnected notebooks</td>
+                          <td class="p-2 text-neutral-200">8,570 images, 10 classes, one unified pipeline</td>
+                        </tr>
+                        <tr class="hover:bg-neutral-900/40 transition-colors">
+                          <td class="p-2 font-semibold text-white">Detection</td>
+                          <td class="p-2 text-neutral-450">COCO-only, missed VRUs entirely</td>
+                          <td class="p-2 text-neutral-200">Dual-model system, 87% person / 91.6% auto-rickshaw</td>
+                        </tr>
+                        <tr class="hover:bg-neutral-900/40 transition-colors">
+                          <td class="p-2 font-semibold text-white">Ranging</td>
+                          <td class="p-2 text-neutral-450">Ultrasonic (spec mismatch, weather/speed limited)</td>
+                          <td class="p-2 text-neutral-200">Dual Waveshare 24GHz mmWave radar</td>
+                        </tr>
+                        <tr class="hover:bg-neutral-900/40 transition-colors">
+                          <td class="p-2 font-semibold text-white">Haptic alert</td>
+                          <td class="p-2 text-neutral-450">Servo motors pointing toward danger</td>
+                          <td class="p-2 text-neutral-200">Directional coin vibration motors in a custom steering wheel</td>
+                        </tr>
+                        <tr class="hover:bg-neutral-900/40 transition-colors">
+                          <td class="p-2 font-semibold text-white">Alert logic</td>
+                          <td class="p-2 text-neutral-450">Radar-only, high false-positive rate</td>
+                          <td class="p-2 text-neutral-200">Radar + vision AND logic, 3-state, speed-adaptive</td>
+                        </tr>
+                        <tr class="hover:bg-neutral-900/40 transition-colors">
+                          <td class="p-2 font-semibold text-white">Camera</td>
+                          <td class="p-2 text-neutral-450">USB webcam, poor low-light, narrow FOV</td>
+                          <td class="p-2 text-neutral-200">Dual CSI cameras, Picamera2, MJPEG streaming</td>
+                        </tr>
+                        <tr class="hover:bg-neutral-900/40 transition-colors">
+                          <td class="p-2 font-semibold text-white">Hardware form</td>
+                          <td class="p-2 text-neutral-450">Breadboard and loose wires</td>
+                          <td class="p-2 text-neutral-200">Mounted inside a 3D-printed scale truck model</td>
+                        </tr>
+                        <tr class="hover:bg-neutral-900/40 transition-colors">
+                          <td class="p-2 font-semibold text-white">Firmware target</td>
+                          <td class="p-2 text-neutral-450">Assumed ESP32-S3 mapping that didn't match physical board</td>
+                          <td class="p-2 text-neutral-200">Verified and corrected ESP32-S3 pin mapping</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Stage 13: Project Scope & Objectives Lists */}
+            <div className="w-[85vw] h-full flex-shrink-0 carbon-texture text-cream flex items-center pl-[42vw] pr-[5vw] border-r border-neutral-800">
+              <div class="w-full py-12 max-w-2xl">
+                <div class="table-col-anim opacity-0 flex flex-col gap-4">
+                  <h3 class="font-serif text-xl md:text-2xl font-bold border-b border-neutral-850 pb-2 text-white">Project Scope & Objectives</h3>
+                  <div class="font-mono text-xs grid grid-cols-2 gap-6 mt-2">
+                    <div class="border border-neutral-800 p-4 bg-neutral-950/80 rounded shadow-md flex flex-col justify-between">
+                      <div>
+                        <span class="text-[#00ff66] font-bold block mb-3 uppercase text-[10px] tracking-wider">✓ Completed Milestones:</span>
+                        <ul class="list-disc list-inside space-y-2 text-neutral-300">
+                          <li>Complete the Pi–ESP32 physical UART integration and run live radar tests in the combined system</li>
+                          <li>Add night-time and rain conditions to the training dataset</li>
+                        </ul>
+                      </div>
+                    </div>
+                    <div class="border border-neutral-800 p-4 bg-neutral-950/80 rounded shadow-md">
+                      <span class="text-crimson font-bold block mb-3 uppercase text-[10px] tracking-wider">// Future Objectives:</span>
+                      <ul class="list-disc list-inside space-y-2 text-neutral-350">
+                        <li>Test on a real 1:1-scale truck cabin mockup rather than the scale model</li>
+                        <li>Add GPS tagging so incidents can be logged for fleet-level analytics</li>
+                        <li>Re-enable and stress-test SD card logging under continuous operation</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Stage 14: Supporting Materials Links */}
+            <div className="w-[85vw] h-full flex-shrink-0 carbon-texture text-cream flex items-center pl-[42vw] pr-[5vw] border-r border-neutral-800">
+              <div class="w-full py-12 max-w-2xl">
+                <div class="table-col-anim opacity-0 flex flex-col gap-4">
+                  <h3 class="font-serif text-xl md:text-2xl font-bold border-b border-neutral-850 pb-2 text-white">Supporting Materials</h3>
+                  <div class="font-mono text-xs grid grid-cols-2 gap-4 mt-2">
+                    <div class="flex flex-col gap-3">
+                      <a href="https://github.com/GhostTrack-Team" target="_blank" class="block border border-neutral-800 p-3 bg-neutral-950/80 hover:border-crimson transition-all duration-300 group">
+                        <span class="text-crimson font-bold block mb-0.5 group-hover:text-white transition-colors">GitHub Organisation</span>
+                        <p class="text-[11px] text-neutral-450">GhostTrack-Team repository link</p>
+                      </a>
+                      <a href="https://www.kaggle.com" target="_blank" class="block border border-neutral-800 p-3 bg-neutral-950/80 hover:border-crimson transition-all duration-300 group">
+                        <span class="text-crimson font-bold block mb-0.5 group-hover:text-white transition-colors">Kaggle Notebook</span>
+                        <p class="text-[11px] text-neutral-450">YOLOv8 pipeline weights and training code</p>
+                      </a>
+                      <a href="https://ghosttruck.onrender.com" target="_blank" class="block border border-neutral-800 p-3 bg-neutral-950/80 hover:border-crimson transition-all duration-300 group">
+                        <span class="text-crimson font-bold block mb-0.5 group-hover:text-white transition-colors">Project Site</span>
+                        <p class="text-[11px] text-neutral-450">ghosttruck.onrender.com</p>
+                      </a>
+                    </div>
+                    <div class="flex flex-col gap-3">
+                      <a href="#" class="block border border-neutral-800 p-3 bg-neutral-950/80 hover:border-crimson transition-all duration-300 group">
+                        <span class="text-crimson font-bold block mb-0.5 group-hover:text-white transition-colors">3D Model Viewer</span>
+                        <p class="text-[11px] text-neutral-450">GitHub Pages Three.js scale-truck cloud viewer</p>
+                      </a>
+                      <div class="border border-neutral-800 p-3 bg-neutral-950/80 h-full flex flex-col justify-center">
+                        <span class="text-crimson font-bold block mb-0.5">Bill of Materials (BOM)</span>
+                        <p class="text-[11px] text-neutral-400">Total cost: ≈ ₹5,050 (retrofit design to an existing truck in under two hours)</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 7: EDITORIAL CLOSURE CLOSING QUOTE */}
+            <div className="panel flex-shrink-0 w-screen h-full flex items-center justify-center bg-cream px-8 md:px-16">
+              <div className="max-w-3xl md:max-w-4xl py-12" id="outro-quote-container">
+                <p className="font-serif italic text-xl md:text-3xl text-charcoal leading-relaxed text-center font-bold">
+                  "The hard part of this project was never the machine learning. It was a split breadboard rail, a chip that wasn't the variant we assumed, pins that existed on a datasheet but not on a physical header, and a haptic approach that had to be thrown out and rebuilt. Every one of those failures forced us to understand the system more deeply than we would have if things had worked the first time — which is, in the end, how the project actually got built."
+                </p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      );
+    }
+
+    // Render React entrypoint
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
+    root.render(<App />);
+  </script>
+</body>
+</html>
